@@ -1,0 +1,14 @@
+{
+  "name": "@routense/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Core routing analysis package for Routense.",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint src --no-error-on-unmatched-pattern",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

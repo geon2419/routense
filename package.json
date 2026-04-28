@@ -1,0 +1,36 @@
+{
+  "name": "routense-workspace",
+  "private": true,
+  "author": "Geonhyeok Lee",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.3.10",
+  "workspaces": [
+    "packages/core",
+    "packages/cli"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "bun run core:lint && bun run cli:lint",
+    "core:lint": "bun run --filter @routense/core lint",
+    "cli:lint": "bun run --filter @routense/cli lint",
+    "typecheck": "bun run core:typecheck && bun run cli:typecheck",
+    "core:typecheck": "bun run --filter @routense/core typecheck",
+    "cli:typecheck": "bun run --filter @routense/cli typecheck",
+    "clean": "bun scripts/clean.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "24.12.2",
+    "eslint": "^10.2.1",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^4.1.5"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

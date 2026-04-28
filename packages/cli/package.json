@@ -1,0 +1,17 @@
+{
+  "name": "@routense/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI package for running Routense project routing analysis.",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint src --no-error-on-unmatched-pattern",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@routense/core": "workspace:*"
+  }
+}
