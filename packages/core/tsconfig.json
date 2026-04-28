@@ -9,6 +9,6 @@
     "declaration": true,
     "declarationMap": true
   },
-  "files": [],
+  "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }
