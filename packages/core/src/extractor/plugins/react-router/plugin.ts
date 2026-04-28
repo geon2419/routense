@@ -8,8 +8,8 @@ import type {
   RoutenseSource,
   SourceLocation,
   VariableInfo,
-} from "../../../parser";
-import type { ExtractorPlugin, RoutingAnalysis } from "../../routense-extractor";
+} from "@/parser";
+import type { ExtractorPlugin, RoutingAnalysis } from "../../extractor";
 
 type Route = RoutingAnalysis["routes"][number];
 type Navigation = RoutingAnalysis["navigations"][number];

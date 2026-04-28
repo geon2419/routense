@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { parseSource } from "../parser";
-import { extractRouting, type ExtractorPlugin } from "./routense-extractor";
+import { extractRouting, type ExtractorPlugin } from "./extractor";
 import { reactRouterPlugin } from "./plugins/react-router";
 
 function pluginNamed(name: string, applicable: boolean): ExtractorPlugin {

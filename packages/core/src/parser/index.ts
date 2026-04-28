@@ -1,4 +1,4 @@
-export { parseSource } from "./routense-parser";
+export { parseSource } from "./parser";
 export type {
   CallExpressionInfo,
   ImportBinding,
@@ -15,4 +15,4 @@ export type {
   ScriptKind,
   SourceLocation,
   VariableInfo,
-} from "./routense-parser";
+} from "./parser";
