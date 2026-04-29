@@ -34,8 +34,8 @@ import type { Link } from "react-router-dom";
 `,
     });
 
-    expect(plugin.isApplicableTo(applicableSource)).toBe(true);
-    expect(plugin.isApplicableTo(typeOnlySource)).toBe(false);
+    expect(plugin.canAnalyze(applicableSource)).toBe(true);
+    expect(plugin.canAnalyze(typeOnlySource)).toBe(false);
   });
 
   it("alias가 적용된 Link, NavLink, Navigate JSX navigation을 수집한다", () => {

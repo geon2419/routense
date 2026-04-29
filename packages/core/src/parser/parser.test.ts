@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseSource } from "./routense-parser";
+import { parseSource } from "./parser";
 
 function locationOf(sourceText: string, fragment: string, filePath: string) {
   const start = sourceText.indexOf(fragment);
