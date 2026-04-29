@@ -1,6 +1,6 @@
 import * as ts from "typescript";
 
-export type ScriptKind = "ts" | "tsx";
+type ScriptKind = "ts" | "tsx";
 
 export type SourceLocation = {
   filePath: string;
@@ -10,7 +10,7 @@ export type SourceLocation = {
   end: number;
 };
 
-export type ImportKind = "side-effect" | "default" | "named" | "namespace";
+type ImportKind = "side-effect" | "default" | "named" | "namespace";
 
 export type ImportBinding = {
   kind: ImportKind;
@@ -21,11 +21,11 @@ export type ImportBinding = {
   location: SourceLocation;
 };
 
-export type RoutenseObjectProperty =
+export type ObjectProperty =
   | {
       kind: "property";
       name: string;
-      value: RoutenseExpression;
+      value: Expression;
       location: SourceLocation;
     }
   | {
@@ -35,23 +35,23 @@ export type RoutenseObjectProperty =
     }
   | {
       kind: "spread";
-      value: RoutenseExpression;
+      value: Expression;
       location: SourceLocation;
     };
 
-export type RoutenseObjectExpression = {
+export type ObjectExpression = {
   kind: "object";
-  properties: RoutenseObjectProperty[];
+  properties: ObjectProperty[];
   location: SourceLocation;
 };
 
-export type RoutenseArrayExpression = {
+export type ArrayExpression = {
   kind: "array";
-  elements: RoutenseExpression[];
+  elements: Expression[];
   location: SourceLocation;
 };
 
-export type RoutenseExpression =
+export type Expression =
   | {
       kind: "string";
       value: string;
@@ -80,18 +80,18 @@ export type RoutenseExpression =
     }
   | {
       kind: "member";
-      object: RoutenseExpression;
-      property: string | RoutenseExpression;
+      object: Expression;
+      property: string | Expression;
       location: SourceLocation;
     }
   | {
       kind: "call";
-      callee: RoutenseExpression;
-      arguments: RoutenseExpression[];
+      callee: Expression;
+      arguments: Expression[];
       location: SourceLocation;
     }
-  | RoutenseObjectExpression
-  | RoutenseArrayExpression
+  | ObjectExpression
+  | ArrayExpression
   | {
       kind: "template";
       raw: string;
@@ -103,34 +103,34 @@ export type RoutenseExpression =
       location: SourceLocation;
     };
 
-export type VariableInfo = {
+export type Variable = {
   name: string;
-  initializer?: RoutenseExpression;
+  initializer?: Expression;
   location: SourceLocation;
 };
 
-export type CallExpressionInfo = {
-  callee: RoutenseExpression;
-  arguments: RoutenseExpression[];
+export type CallExpression = {
+  callee: Expression;
+  arguments: Expression[];
   location: SourceLocation;
 };
 
-export type JsxAttributeInfo =
+export type JsxAttribute =
   | {
       kind: "attribute";
       name: string;
-      value?: RoutenseExpression;
+      value?: Expression;
       location: SourceLocation;
     }
   | {
       kind: "spread";
-      value: RoutenseExpression;
+      value: Expression;
       location: SourceLocation;
     };
 
-export type JsxElementInfo = {
+export type JsxElement = {
   tagName: string;
-  attributes: JsxAttributeInfo[];
+  attributes: JsxAttribute[];
   location: SourceLocation;
 };
 
@@ -139,30 +139,30 @@ export type ParseDiagnostic = {
   location: SourceLocation;
 };
 
-export type RoutenseSource = {
-  filePath: string;
-  scriptKind: ScriptKind;
-  imports: ImportBinding[];
-  variables: VariableInfo[];
-  calls: CallExpressionInfo[];
-  jsxElements: JsxElementInfo[];
-  objects: RoutenseObjectExpression[];
-  arrays: RoutenseArrayExpression[];
-  diagnostics: ParseDiagnostic[];
-};
-
 export type ParseSourceInput = {
   filePath: string;
   sourceText: string;
 };
 
-export function parseSource(input: ParseSourceInput): RoutenseSource {
+export type Source = {
+  filePath: string;
+  scriptKind: ScriptKind;
+  imports: ImportBinding[];
+  variables: Variable[];
+  calls: CallExpression[];
+  jsxElements: JsxElement[];
+  objects: ObjectExpression[];
+  arrays: ArrayExpression[];
+  diagnostics: ParseDiagnostic[];
+};
+
+export function parseSource(input: ParseSourceInput): Source {
   return new RoutenseParser(input).parse();
 }
 
 class RoutenseParser {
   private readonly sourceFile: ts.SourceFile;
-  private readonly parsed: RoutenseSource;
+  private readonly parsed: Source;
 
   constructor(private readonly input: ParseSourceInput) {
     const scriptKind = this.getScriptKind(input.filePath);
@@ -188,7 +188,7 @@ class RoutenseParser {
     };
   }
 
-  parse(): RoutenseSource {
+  parse(): Source {
     this.visit(this.sourceFile);
     return this.parsed;
   }
@@ -304,8 +304,8 @@ class RoutenseParser {
     return importClause.phaseModifier === ts.SyntaxKind.TypeKeyword;
   }
 
-  private toJsxAttributes(attributes: ts.JsxAttributes): JsxAttributeInfo[] {
-    return attributes.properties.map((property): JsxAttributeInfo => {
+  private toJsxAttributes(attributes: ts.JsxAttributes): JsxAttribute[] {
+    return attributes.properties.map((property): JsxAttribute => {
       if (ts.isJsxSpreadAttribute(property)) {
         return {
           kind: "spread",
@@ -323,7 +323,7 @@ class RoutenseParser {
     });
   }
 
-  private toJsxAttributeValue(attribute: ts.JsxAttribute): RoutenseExpression | undefined {
+  private toJsxAttributeValue(attribute: ts.JsxAttribute): Expression | undefined {
     if (!attribute.initializer) {
       return {
         kind: "boolean",
@@ -347,7 +347,7 @@ class RoutenseParser {
     };
   }
 
-  private toExpression(node: ts.Expression): RoutenseExpression {
+  private toExpression(node: ts.Expression): Expression {
     if (ts.isStringLiteralLike(node)) {
       return {
         kind: "string",
@@ -439,7 +439,7 @@ class RoutenseParser {
     };
   }
 
-  private toObjectExpression(node: ts.ObjectLiteralExpression): RoutenseObjectExpression {
+  private toObjectExpression(node: ts.ObjectLiteralExpression): ObjectExpression {
     return {
       kind: "object",
       properties: node.properties.map((property) => this.toObjectProperty(property)),
@@ -447,7 +447,7 @@ class RoutenseParser {
     };
   }
 
-  private toObjectProperty(property: ts.ObjectLiteralElementLike): RoutenseObjectProperty {
+  private toObjectProperty(property: ts.ObjectLiteralElementLike): ObjectProperty {
     if (ts.isSpreadAssignment(property)) {
       return {
         kind: "spread",
@@ -481,7 +481,7 @@ class RoutenseParser {
     };
   }
 
-  private toArrayExpression(node: ts.ArrayLiteralExpression): RoutenseArrayExpression {
+  private toArrayExpression(node: ts.ArrayLiteralExpression): ArrayExpression {
     return {
       kind: "array",
       elements: node.elements.map((element) => this.toExpression(element)),

@@ -1,13 +1,13 @@
 import type {
-  CallExpressionInfo,
+  CallExpression,
+  Expression,
   ImportBinding,
-  JsxAttributeInfo,
-  RoutenseExpression,
-  RoutenseObjectExpression,
-  RoutenseObjectProperty,
-  RoutenseSource,
+  JsxAttribute,
+  ObjectExpression,
+  ObjectProperty,
+  Source,
   SourceLocation,
-  VariableInfo,
+  Variable,
 } from "@/parser";
 import type { ExtractorPlugin, RoutingAnalysis } from "../../extractor";
 
@@ -92,7 +92,7 @@ function isReactRouterApi(value: string | undefined): value is ReactRouterApi {
 }
 
 function collectNavigatorNames(
-  variables: VariableInfo[],
+  variables: Variable[],
   bindings: Map<string, ReactRouterApi>,
 ): Set<string> {
   const navigators = new Set<string>();
@@ -112,7 +112,7 @@ function collectNavigatorNames(
 }
 
 function collectJsxNavigations(
-  source: RoutenseSource,
+  source: Source,
   bindings: Map<string, ReactRouterApi>,
 ): Navigation[] {
   const navigations: Navigation[] = [];
@@ -154,7 +154,7 @@ function collectJsxNavigations(
   return navigations;
 }
 
-function collectNavigateCalls(source: RoutenseSource, navigatorNames: Set<string>): Navigation[] {
+function collectNavigateCalls(source: Source, navigatorNames: Set<string>): Navigation[] {
   return source.calls.flatMap((call): Navigation[] => {
     if (
       call.callee.kind !== "identifier" ||
@@ -178,7 +178,7 @@ function collectNavigateCalls(source: RoutenseSource, navigatorNames: Set<string
   });
 }
 
-function collectJsxRoutes(source: RoutenseSource, bindings: Map<string, ReactRouterApi>): Route[] {
+function collectJsxRoutes(source: Source, bindings: Map<string, ReactRouterApi>): Route[] {
   const routes: Route[] = [];
 
   for (const element of source.jsxElements) {
@@ -202,7 +202,7 @@ function collectJsxRoutes(source: RoutenseSource, bindings: Map<string, ReactRou
 }
 
 function collectCreateBrowserRouterRoutes(
-  source: RoutenseSource,
+  source: Source,
   bindings: Map<string, ReactRouterApi>,
 ): Route[] {
   return source.calls.flatMap((call) => {
@@ -215,14 +215,14 @@ function collectCreateBrowserRouterRoutes(
 }
 
 function isCallToReactRouterApi(
-  call: CallExpressionInfo,
+  call: CallExpression,
   bindings: Map<string, ReactRouterApi>,
   api: ReactRouterApi,
 ): boolean {
   return call.callee.kind === "identifier" && bindings.get(call.callee.name) === api;
 }
 
-function collectRoutesFromExpression(expression: RoutenseExpression): Route[] {
+function collectRoutesFromExpression(expression: Expression): Route[] {
   if (expression.kind === "array") {
     return expression.elements.flatMap((element) => collectRoutesFromExpression(element));
   }
@@ -234,7 +234,7 @@ function collectRoutesFromExpression(expression: RoutenseExpression): Route[] {
   return collectRoutesFromObject(expression);
 }
 
-function collectRoutesFromObject(expression: RoutenseObjectExpression): Route[] {
+function collectRoutesFromObject(expression: ObjectExpression): Route[] {
   const routes: Route[] = [];
   const path = propertyNamed(expression.properties, "path");
 
@@ -258,24 +258,24 @@ function collectRoutesFromObject(expression: RoutenseObjectExpression): Route[] 
 }
 
 function propertyNamed(
-  properties: RoutenseObjectProperty[],
+  properties: ObjectProperty[],
   name: string,
-): RoutenseObjectProperty | undefined {
+): ObjectProperty | undefined {
   return properties.find((property) => property.kind !== "spread" && property.name === name);
 }
 
 function findAttribute(
-  attributes: JsxAttributeInfo[],
+  attributes: JsxAttribute[],
   name: string,
-): Extract<JsxAttributeInfo, { kind: "attribute" }> | undefined {
+): Extract<JsxAttribute, { kind: "attribute" }> | undefined {
   return attributes.find(
-    (attribute): attribute is Extract<JsxAttributeInfo, { kind: "attribute" }> =>
+    (attribute): attribute is Extract<JsxAttribute, { kind: "attribute" }> =>
       attribute.kind === "attribute" && attribute.name === name,
   );
 }
 
 function targetFromAttribute(
-  attribute: Extract<JsxAttributeInfo, { kind: "attribute" }> | undefined,
+  attribute: Extract<JsxAttribute, { kind: "attribute" }> | undefined,
 ): ResolvedTarget | undefined {
   if (!attribute?.value) {
     return undefined;
@@ -287,7 +287,7 @@ function targetFromAttribute(
   };
 }
 
-function targetFromExpression(expression: RoutenseExpression): RouteTarget {
+function targetFromExpression(expression: Expression): RouteTarget {
   if (expression.kind === "string") {
     return {
       kind: "static",
@@ -305,7 +305,7 @@ function confidenceForTarget(target: RouteTarget): AnalysisConfidence {
   return target.kind === "static" ? "high" : "low";
 }
 
-function methodFromNavigateOptions(options: RoutenseExpression | undefined): NavigationMethod {
+function methodFromNavigateOptions(options: Expression | undefined): NavigationMethod {
   if (options?.kind !== "object") {
     return "push";
   }
@@ -320,12 +320,12 @@ function methodFromNavigateOptions(options: RoutenseExpression | undefined): Nav
 }
 
 function isBooleanAttributeTrue(
-  attribute: Extract<JsxAttributeInfo, { kind: "attribute" }> | undefined,
+  attribute: Extract<JsxAttribute, { kind: "attribute" }> | undefined,
 ): boolean {
   return attribute?.value?.kind === "boolean" && attribute.value.value;
 }
 
-function expressionToRaw(expression: RoutenseExpression): string {
+function expressionToRaw(expression: Expression): string {
   switch (expression.kind) {
     case "string":
       return expression.raw;

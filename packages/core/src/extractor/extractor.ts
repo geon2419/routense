@@ -1,4 +1,4 @@
-import type { RoutenseSource, SourceLocation } from "../parser";
+import type { Source, SourceLocation } from "../parser";
 
 type AnalysisConfidence = "high" | "low";
 
@@ -41,16 +41,16 @@ export type RoutingAnalysis = {
 
 export type ExtractorPlugin = {
   name: string;
-  isApplicableTo(source: RoutenseSource): boolean;
-  analyze(source: RoutenseSource): RoutingAnalysis;
+  isApplicableTo(source: Source): boolean;
+  analyze(source: Source): RoutingAnalysis;
 };
 
 type ExtractInput = {
-  sources: RoutenseSource[];
+  sources: Source[];
 };
 
 export type ExtractRoutingInput = {
-  sources: RoutenseSource[];
+  sources: Source[];
   plugins: ExtractorPlugin[];
 };
 
