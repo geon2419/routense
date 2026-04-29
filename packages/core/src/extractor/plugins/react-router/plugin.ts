@@ -1,5 +1,4 @@
 import type {
-  CallExpression,
   Expression,
   ImportBinding,
   JsxAttribute,
@@ -16,8 +15,10 @@ type Navigation = RoutingAnalysis["navigations"][number];
 type RouteTarget = Route["path"];
 type AnalysisConfidence = Route["confidence"];
 type NavigationMethod = Navigation["method"];
+type JsxRegularAttribute = Extract<JsxAttribute, { kind: "attribute" }>;
+type JsxRegularAttributeWithValue = JsxRegularAttribute & { value: Expression };
 
-type ReactRouterApi =
+type ReactRouterAPI =
   | "Link"
   | "NavLink"
   | "Navigate"
@@ -31,7 +32,7 @@ type ResolvedTarget = {
 };
 
 const REACT_ROUTER_MODULES = new Set(["react-router", "react-router-dom"]);
-const REACT_ROUTER_APIS = new Set<ReactRouterApi>([
+const REACT_ROUTER_APIS = new Set<ReactRouterAPI>([
   "Link",
   "NavLink",
   "Navigate",
@@ -42,67 +43,64 @@ const REACT_ROUTER_APIS = new Set<ReactRouterApi>([
 
 export function reactRouterPlugin(): ExtractorPlugin {
   return {
-    name: "react-router",
-    isApplicableTo(source) {
-      return collectReactRouterBindings(source.imports).size > 0;
+    framework: "react-router",
+    canAnalyze(source) {
+      return collectReactRouterAPIs(source.imports).size > 0;
     },
     analyze(source) {
-      const bindings = collectReactRouterBindings(source.imports);
-      const navigatorNames = collectNavigatorNames(source.variables, bindings);
+      const apis = collectReactRouterAPIs(source.imports);
+      const navigators = collectNavigators(source.variables, apis);
 
       return {
         framework: "react-router",
-        pluginName: "react-router",
         filePath: source.filePath,
         routes: [
-          ...collectJsxRoutes(source, bindings),
-          ...collectCreateBrowserRouterRoutes(source, bindings),
+          ...collectJsxRoutes(source, apis),
+          ...collectCreateBrowserRouterRoutes(source, apis),
         ],
         navigations: [
-          ...collectJsxNavigations(source, bindings),
-          ...collectNavigateCalls(source, navigatorNames),
+          ...collectJsxNavigations(source, apis),
+          ...collectNavigateCalls(source, navigators),
         ],
       };
     },
   };
 }
 
-function collectReactRouterBindings(imports: ImportBinding[]): Map<string, ReactRouterApi> {
-  const bindings = new Map<string, ReactRouterApi>();
+function collectReactRouterAPIs(imports: ImportBinding[]): Map<string, ReactRouterAPI> {
+  const apis = new Map<string, ReactRouterAPI>();
 
   for (const binding of imports) {
-    if (
-      binding.kind !== "named" ||
-      binding.isTypeOnly ||
-      !REACT_ROUTER_MODULES.has(binding.module) ||
-      !binding.local ||
-      !isReactRouterApi(binding.imported)
-    ) {
-      continue;
-    }
+    const imported = binding.imported as ReactRouterAPI;
 
-    bindings.set(binding.local, binding.imported);
+    if (
+      binding.kind === "named" &&
+      binding.local &&
+      binding.isTypeOnly === false &&
+      imported &&
+      REACT_ROUTER_APIS.has(imported) &&
+      REACT_ROUTER_MODULES.has(binding.module)
+    ) {
+      apis.set(binding.local, imported);
+    }
   }
 
-  return bindings;
+  return apis;
 }
 
-function isReactRouterApi(value: string | undefined): value is ReactRouterApi {
-  return value !== undefined && REACT_ROUTER_APIS.has(value as ReactRouterApi);
-}
-
-function collectNavigatorNames(
+function collectNavigators(
   variables: Variable[],
-  bindings: Map<string, ReactRouterApi>,
+  apis: Map<string, ReactRouterAPI>,
 ): Set<string> {
   const navigators = new Set<string>();
 
   for (const variable of variables) {
     const initializer = variable.initializer;
     if (
-      initializer?.kind === "call" &&
+      initializer &&
+      initializer.kind === "call" &&
       initializer.callee.kind === "identifier" &&
-      bindings.get(initializer.callee.name) === "useNavigate"
+      apis.get(initializer.callee.name) === "useNavigate"
     ) {
       navigators.add(variable.name);
     }
@@ -113,89 +111,102 @@ function collectNavigatorNames(
 
 function collectJsxNavigations(
   source: Source,
-  bindings: Map<string, ReactRouterApi>,
+  apis: Map<string, ReactRouterAPI>,
 ): Navigation[] {
   const navigations: Navigation[] = [];
 
   for (const element of source.jsxElements) {
-    const api = bindings.get(element.tagName);
+    const api = apis.get(element.tagName);
 
     if (api === "Link" || api === "NavLink") {
-      const resolvedTarget = targetFromAttribute(findAttribute(element.attributes, "to"));
-
-      if (resolvedTarget) {
-        navigations.push({
-          kind: "link",
-          target: resolvedTarget.target,
-          method: "declarative",
-          confidence: confidenceForTarget(resolvedTarget.target),
-          evidence: resolvedTarget.evidence,
-        });
+      const toAttribute = findAttribute(element.attributes, "to");
+      if (!hasAttributeValue(toAttribute)) {
+        continue;
       }
+
+      const resolvedTarget = targetFromAttribute(toAttribute);
+
+      navigations.push({
+        kind: "link",
+        target: resolvedTarget.target,
+        method: "declarative",
+        confidence: confidenceForTarget(resolvedTarget.target),
+        evidence: resolvedTarget.evidence,
+      });
     }
 
     if (api === "Navigate") {
-      const resolvedTarget = targetFromAttribute(findAttribute(element.attributes, "to"));
+      const toAttribute = findAttribute(element.attributes, "to");
+      if (!hasAttributeValue(toAttribute)) {
+        continue;
+      }
 
-      if (resolvedTarget) {
-        navigations.push({
-          kind: "redirect",
-          target: resolvedTarget.target,
-          method: isBooleanAttributeTrue(findAttribute(element.attributes, "replace"))
+      const resolvedTarget = targetFromAttribute(toAttribute);
+      const replaceAttribute = findAttribute(element.attributes, "replace");
+
+      navigations.push({
+        kind: "redirect",
+        target: resolvedTarget.target,
+        method:
+          replaceAttribute &&
+          replaceAttribute.value?.kind === "boolean" &&
+          replaceAttribute.value.value
             ? "replace"
             : "push",
-          confidence: confidenceForTarget(resolvedTarget.target),
-          evidence: resolvedTarget.evidence,
-        });
-      }
+        confidence: confidenceForTarget(resolvedTarget.target),
+        evidence: resolvedTarget.evidence,
+      });
     }
   }
 
   return navigations;
 }
 
-function collectNavigateCalls(source: Source, navigatorNames: Set<string>): Navigation[] {
+function collectNavigateCalls(source: Source, navigators: Set<string>): Navigation[] {
   return source.calls.flatMap((call): Navigation[] => {
-    if (
-      call.callee.kind !== "identifier" ||
-      !navigatorNames.has(call.callee.name) ||
-      !call.arguments[0]
-    ) {
-      return [];
+    if (call.callee.kind === "identifier" && navigators.has(call.callee.name)) {
+      const firstArgument = call.arguments[0];
+
+      if (firstArgument) {
+        const target = targetFromExpression(firstArgument);
+
+        return [
+          {
+            kind: "navigate",
+            target,
+            method: methodFromNavigateOptions(call.arguments[1]),
+            confidence: confidenceForTarget(target),
+            evidence: call.location,
+          },
+        ];
+      }
     }
 
-    const target = targetFromExpression(call.arguments[0]);
-
-    return [
-      {
-        kind: "navigate",
-        target,
-        method: methodFromNavigateOptions(call.arguments[1]),
-        confidence: confidenceForTarget(target),
-        evidence: call.location,
-      },
-    ];
+    return [];
   });
 }
 
-function collectJsxRoutes(source: Source, bindings: Map<string, ReactRouterApi>): Route[] {
+function collectJsxRoutes(source: Source, apis: Map<string, ReactRouterAPI>): Route[] {
   const routes: Route[] = [];
 
   for (const element of source.jsxElements) {
-    if (bindings.get(element.tagName) !== "Route") {
+    if (apis.get(element.tagName) !== "Route") {
       continue;
     }
 
-    const resolvedPath = targetFromAttribute(findAttribute(element.attributes, "path"));
-
-    if (resolvedPath) {
-      routes.push({
-        kind: "route",
-        path: resolvedPath.target,
-        confidence: confidenceForTarget(resolvedPath.target),
-        evidence: resolvedPath.evidence,
-      });
+    const pathAttribute = findAttribute(element.attributes, "path");
+    if (!hasAttributeValue(pathAttribute)) {
+      continue;
     }
+
+    const resolvedPath = targetFromAttribute(pathAttribute);
+
+    routes.push({
+      kind: "route",
+      path: resolvedPath.target,
+      confidence: confidenceForTarget(resolvedPath.target),
+      evidence: resolvedPath.evidence,
+    });
   }
 
   return routes;
@@ -203,23 +214,22 @@ function collectJsxRoutes(source: Source, bindings: Map<string, ReactRouterApi>)
 
 function collectCreateBrowserRouterRoutes(
   source: Source,
-  bindings: Map<string, ReactRouterApi>,
+  apis: Map<string, ReactRouterAPI>,
 ): Route[] {
-  return source.calls.flatMap((call) => {
-    if (!isCallToReactRouterApi(call, bindings, "createBrowserRouter") || !call.arguments[0]) {
-      return [];
+  return source.calls.flatMap((call): Route[] => {
+    if (
+      call.callee.kind === "identifier" &&
+      apis.get(call.callee.name) === "createBrowserRouter"
+    ) {
+      const firstArgument = call.arguments[0];
+
+      if (firstArgument) {
+        return collectRoutesFromExpression(firstArgument);
+      }
     }
 
-    return collectRoutesFromExpression(call.arguments[0]);
+    return [];
   });
-}
-
-function isCallToReactRouterApi(
-  call: CallExpression,
-  bindings: Map<string, ReactRouterApi>,
-  api: ReactRouterApi,
-): boolean {
-  return call.callee.kind === "identifier" && bindings.get(call.callee.name) === api;
 }
 
 function collectRoutesFromExpression(expression: Expression): Route[] {
@@ -227,19 +237,20 @@ function collectRoutesFromExpression(expression: Expression): Route[] {
     return expression.elements.flatMap((element) => collectRoutesFromExpression(element));
   }
 
-  if (expression.kind !== "object") {
-    return [];
+  if (expression.kind === "object") {
+    return collectRoutesFromObject(expression);
   }
 
-  return collectRoutesFromObject(expression);
+  return [];
 }
 
 function collectRoutesFromObject(expression: ObjectExpression): Route[] {
   const routes: Route[] = [];
-  const path = propertyNamed(expression.properties, "path");
 
-  if (path?.kind === "property") {
+  const path = propertyNamed(expression.properties, "path")
+  if (path && path.kind === "property") {
     const target = targetFromExpression(path.value);
+  
     routes.push({
       kind: "route",
       path: target,
@@ -249,8 +260,7 @@ function collectRoutesFromObject(expression: ObjectExpression): Route[] {
   }
 
   const children = propertyNamed(expression.properties, "children");
-
-  if (children?.kind === "property") {
+  if (children && children.kind === "property") {
     routes.push(...collectRoutesFromExpression(children.value));
   }
 
@@ -267,20 +277,23 @@ function propertyNamed(
 function findAttribute(
   attributes: JsxAttribute[],
   name: string,
-): Extract<JsxAttribute, { kind: "attribute" }> | undefined {
-  return attributes.find(
-    (attribute): attribute is Extract<JsxAttribute, { kind: "attribute" }> =>
-      attribute.kind === "attribute" && attribute.name === name,
-  );
+): JsxRegularAttribute | undefined {
+  function isAttribute(attribute: JsxAttribute): attribute is JsxRegularAttribute {
+    return attribute.kind === "attribute" && attribute.name === name;
+  }
+
+  return attributes.find(isAttribute);
+}
+
+function hasAttributeValue(
+  attribute: JsxRegularAttribute | undefined,
+): attribute is JsxRegularAttributeWithValue {
+  return attribute?.value !== undefined;
 }
 
 function targetFromAttribute(
-  attribute: Extract<JsxAttribute, { kind: "attribute" }> | undefined,
-): ResolvedTarget | undefined {
-  if (!attribute?.value) {
-    return undefined;
-  }
-
+  attribute: JsxRegularAttributeWithValue,
+): ResolvedTarget {
   return {
     target: targetFromExpression(attribute.value),
     evidence: attribute.value.location,
@@ -306,23 +319,20 @@ function confidenceForTarget(target: RouteTarget): AnalysisConfidence {
 }
 
 function methodFromNavigateOptions(options: Expression | undefined): NavigationMethod {
-  if (options?.kind !== "object") {
-    return "push";
-  }
+  if (options && options.kind === "object") {
+    const replace = propertyNamed(options.properties, "replace");
 
-  const replace = propertyNamed(options.properties, "replace");
-
-  if (replace?.kind === "property" && replace.value.kind === "boolean" && replace.value.value) {
-    return "replace";
+    if (
+      replace &&
+      replace.kind === "property" &&
+      replace.value.kind === "boolean" &&
+      replace.value.value
+    ) {
+      return "replace";
+    }
   }
 
   return "push";
-}
-
-function isBooleanAttributeTrue(
-  attribute: Extract<JsxAttribute, { kind: "attribute" }> | undefined,
-): boolean {
-  return attribute?.value?.kind === "boolean" && attribute.value.value;
 }
 
 function expressionToRaw(expression: Expression): string {

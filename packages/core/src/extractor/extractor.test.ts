@@ -4,13 +4,15 @@ import { parseSource } from "../parser";
 import { type ExtractorPlugin, extractRouting } from "./extractor";
 import { reactRouterPlugin } from "./plugins/react-router";
 
-function pluginNamed(name: string, applicable: boolean): ExtractorPlugin {
+function pluginForFramework(
+  framework: ExtractorPlugin["framework"],
+  applicable: boolean,
+): ExtractorPlugin {
   return {
-    name,
-    isApplicableTo: () => applicable,
+    framework,
+    canAnalyze: () => applicable,
     analyze: (source) => ({
-      framework: "react-router",
-      pluginName: name,
+      framework,
       filePath: source.filePath,
       routes: [],
       navigations: [],
@@ -28,7 +30,7 @@ describe("extractRouting", () => {
     expect(
       extractRouting({
         sources: [source],
-        plugins: [pluginNamed("ignored", false)],
+        plugins: [pluginForFramework("react-router", false)],
       }),
     ).toEqual([]);
   });
@@ -44,15 +46,18 @@ describe("extractRouting", () => {
     });
     const results = extractRouting({
       sources: [firstSource, secondSource],
-      plugins: [pluginNamed("first", true), pluginNamed("second", true)],
+      plugins: [
+        pluginForFramework("react-router", true),
+        pluginForFramework("nextjs-page-router", true),
+      ],
     });
 
     expect(results).toHaveLength(4);
-    expect(results.map((result) => `${result.filePath}:${result.pluginName}`)).toEqual([
-      "/fixtures/first.tsx:first",
-      "/fixtures/first.tsx:second",
-      "/fixtures/second.tsx:first",
-      "/fixtures/second.tsx:second",
+    expect(results.map((result) => `${result.filePath}:${result.framework}`)).toEqual([
+      "/fixtures/first.tsx:react-router",
+      "/fixtures/first.tsx:nextjs-page-router",
+      "/fixtures/second.tsx:react-router",
+      "/fixtures/second.tsx:nextjs-page-router",
     ]);
   });
 
@@ -77,7 +82,6 @@ export function App() {
     expect(results[0]).toEqual(
       expect.objectContaining({
         framework: "react-router",
-        pluginName: "react-router",
         filePath: "/fixtures/app.tsx",
       }),
     );

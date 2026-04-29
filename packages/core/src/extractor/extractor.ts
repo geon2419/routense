@@ -31,17 +31,18 @@ type Navigation = {
   evidence: SourceLocation;
 };
 
+type Framework = "react-router" | "nextjs-page-router" | "nextjs-app-router";
+
 export type RoutingAnalysis = {
-  framework: "react-router";
-  pluginName: string;
+  framework: Framework;
   filePath: string;
   routes: Route[];
   navigations: Navigation[];
 };
 
 export type ExtractorPlugin = {
-  name: string;
-  isApplicableTo(source: Source): boolean;
+  framework: Framework;
+  canAnalyze(source: Source): boolean;
   analyze(source: Source): RoutingAnalysis;
 };
 
@@ -54,7 +55,7 @@ export type ExtractRoutingInput = {
   plugins: ExtractorPlugin[];
 };
 
-class RoutenseExtractor {
+export class RoutenseExtractor {
   readonly #plugins: ExtractorPlugin[];
 
   constructor(input: { plugins: ExtractorPlugin[] }) {
@@ -64,7 +65,7 @@ class RoutenseExtractor {
   extract(input: ExtractInput): RoutingAnalysis[] {
     return input.sources.flatMap((source) => {
       return this.#plugins
-        .filter((plugin) => plugin.isApplicableTo(source))
+        .filter((plugin) => plugin.canAnalyze(source))
         .map((plugin) => plugin.analyze(source));
     });
   }
